@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import { useState, useEffect } from 'react';
 import { ToastContainer, toast } from 'react-toastify';
 
 import { Searchbar } from 'components/Searchbar/Searchbar';
@@ -10,111 +10,93 @@ import { Loader } from 'components/Loader/Loader';
 import { ImageAbsenceView } from 'components/ImagesAbsenceView/ImagesAbsenceView';
 import { fetchImages } from 'api/imagesApi';
 
-export class App extends Component {
-  state = {
-    searchQuery: '',
-    page: 1,
-    gallery: [],
-    error: null,
-    status: 'idle',
-    showModal: false,
-    clickedImg: {},
-    showButton: false,
-  };
-  componentDidUpdate(_, prevState) {
-    const { searchQuery, page, gallery } = this.state;
-    const prevPage = prevState.page;
-    const prevSearchQuery = prevState.searchQuery;
+export const App = () => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [gallery, setGallery] = useState([]);
+  const [error, setError] = useState(null);
+  const [status, setStatus] = useState('idle');
+  const [showModal, setShowModal] = useState(false);
+  const [clickedImg, setClickedImg] = useState({});
+  const [showButton, setShowButton] = useState(false);
 
-    if (
-      gallery.length > 12 &&
-      gallery.length !== prevState.gallery.length &&
-      page !== 1
-    ) {
+  useEffect(() => {
+    if (gallery.length > 12 && page !== 1) {
       onSmoothScroll();
     }
+  }, [gallery, page]);
 
-    if (prevPage !== page || prevSearchQuery !== searchQuery) {
-      this.setState({ status: 'pending', showButton: false });
-      fetchImages(searchQuery, page)
-        .then(response => {
-          this.setState(prevState => ({
-            gallery: [...prevState.gallery, ...response],
-            status: 'resolved',
-            showButton: true,
-          }));
-
-          if (response.length === 0) {
-            this.setState({ gallery: [], showButton: false });
-            return onSearchError(searchQuery);
-          }
-          if (response.length <= 11) {
-            this.setState({ showButton: false });
-            onSearchEndNotice();
-          } else {
-            this.setState({ showButton: true });
-          }
-        })
-        .catch(error => this.setState({ error, status: 'rejected' }));
+  useEffect(() => {
+    if (searchQuery === '') {
+      return;
     }
-  }
+    setStatus('pending');
+    setShowButton(false);
+    fetchImages(searchQuery, page)
+      .then(response => {
+        setGallery(prevState => [...prevState, ...response]);
+        setStatus('resolved');
+        setShowButton(true);
+        if (response.length === 0) {
+          setGallery([]);
+          setShowButton(false);
+          return onSearchError(searchQuery);
+        }
+        if (response.length <= 11) {
+          setShowButton(false);
+          onSearchEndNotice();
+        } else {
+          setShowButton(true);
+        }
+      })
+      .catch(error => {
+        setError(error);
+        setStatus('rejected');
+      });
+  }, [page, searchQuery]);
 
-  handleSearchFormSubmit = searchQuery => {
-    searchQuery !== this.state.searchQuery
-      ? this.setState({ searchQuery, page: 1, gallery: [] })
-      : onDoubleSearchNotice();
+  const handleSearchFormSubmit = searchText => {
+    if (searchQuery === searchText) {
+      return onDoubleSearchNotice();
+    }
+    setSearchQuery(searchText);
+    setPage(1);
+    setGallery([]);
   };
 
-  loadMore = () => {
-    this.setState(prevState => ({
-      page: prevState.page + 1,
-    }));
+  const loadMore = () => {
+    setPage(prevState => prevState + 1);
   };
-  toggleModal = () => {
-    this.setState(({ showModal }) => ({
-      showModal: !showModal,
-    }));
+  const toggleModal = () => {
+    setShowModal(prevState => !prevState);
   };
 
-  onImgClick = e => {
+  const onImgClick = e => {
     const clickedImgId = Number(e.currentTarget.id);
-    const foundImg = this.state.gallery.find(
-      element => element.id === clickedImgId
-    );
-    this.setState({
-      clickedImg: foundImg,
-    });
-    this.toggleModal();
+    const foundImg = gallery.find(element => element.id === clickedImgId);
+    setClickedImg(foundImg);
+    toggleModal();
   };
 
-  render() {
-    const { gallery, status, error, showModal, clickedImg, showButton } =
-      this.state;
-
-    return (
-      <Container>
-        <Searchbar onSubmit={this.handleSearchFormSubmit} />
-        {status === 'pending' && <Loader />}
-        {status === 'rejected' && <ImageAbsenceView message={error.message} />}
-        {gallery[0] && (
-          <ImageGallery
-            id="gallery"
-            gallery={gallery}
-            onImgClick={this.onImgClick}
-          />
-        )}
-        {status === 'pending' && gallery[0] && <Loader />}
-        {showButton && (
-          <Button type="button" text="Load more" onClick={this.loadMore} />
-        )}
-        {showModal && (
-          <Modal onClose={this.toggleModal} clickedImg={clickedImg}></Modal>
-        )}
-        <ToastContainer autoClose={2000} />
-      </Container>
-    );
-  }
-}
+  return (
+    <Container>
+      <Searchbar onSubmit={handleSearchFormSubmit} />
+      {status === 'pending' && <Loader />}
+      {status === 'rejected' && <ImageAbsenceView message={error.message} />}
+      {gallery[0] && (
+        <ImageGallery id="gallery" gallery={gallery} onImgClick={onImgClick} />
+      )}
+      {status === 'pending' && gallery[0] && <Loader />}
+      {showButton && (
+        <Button type="button" text="Load more" onClick={loadMore} />
+      )}
+      {showModal && (
+        <Modal onClose={toggleModal} clickedImg={clickedImg}></Modal>
+      )}
+      <ToastContainer autoClose={2000} />
+    </Container>
+  );
+};
 
 function onSearchEndNotice() {
   return toast.warn(
